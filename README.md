@@ -1,4 +1,4 @@
-# NeyoFit Access Control
+# Access Control System
 
 A multi-tenant IoT physical access control platform. RFID cards are scanned by ESP32 devices, the scan is sent encrypted over MQTT to a centralized backend, and the backend makes the access decision and responds. All authentication logic lives on the server — devices are dumb endpoints.
 
@@ -65,11 +65,11 @@ A multi-tenant IoT physical access control platform. RFID cards are scanned by E
 ```
 1. Card tapped on ESP32
 2. ESP32 encrypts { member, exp } with server's RSA public key
-3. Publishes { device, ct } to neyofit/access  over TLS
+3. Publishes { device, ct } to  acs/access  over TLS
 4. Backend decrypts with server private key
 5. Looks up device → tenant → card → validates
 6. Encrypts response with device's RSA public key
-7. Publishes { ct } to neyofit/response/{deviceId}
+7. Publishes { ct } to  acs/response/{deviceId}
 8. ESP32 decrypts with device private key → unlocks door / denies
 ```
 
@@ -85,7 +85,7 @@ A multi-tenant IoT physical access control platform. RFID cards are scanned by E
 ### Server / VPS
 - Ubuntu 22.04+ (or any Debian-based Linux)
 - Minimum 2 vCPU, 2GB RAM, 20GB disk
-- A domain name with DNS A record pointing to the server (e.g. `api.neyofit.io`, `app.neyofit.io`, `mqtt.neyofit.io`)
+- A domain name with DNS A records pointing to the server (e.g. `api.your-domain.com`, `app.your-domain.com`, `mqtt.your-domain.com`)
 - Ports open: `80`, `443`, `3000`, `5001`, `8883`
 
 ### Local Development Machine
@@ -117,7 +117,7 @@ cd access-control-project
 
 ```bash
 psql -U postgres
-CREATE DATABASE neyofit;
+CREATE DATABASE access_control;
 \q
 ```
 
@@ -131,13 +131,13 @@ npm install
 Create `backend/.env`:
 
 ```env
-DATABASE_URL=postgresql://<user>@localhost:5432/neyofit
+DATABASE_URL=postgresql://<user>@localhost:5432/access_control
 JWT_SECRET=<random 32+ char string>
 JWT_REFRESH_SECRET=<random 32+ char string>
 PORT=5001
 NODE_ENV=development
 MQTT_BROKER_URL=mqtt://localhost:1883
-MQTT_USERNAME=neyofit-backend
+MQTT_USERNAME=acs-backend
 MQTT_PASSWORD=<your broker backend password>
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
@@ -261,10 +261,10 @@ These are reused across all future projects and rebuilds. Never need to pull aga
 
 ### 5.3 Create the shared Docker network
 
-All NeyoFit containers communicate over this network:
+All containers communicate over this network:
 
 ```bash
-docker network create neyofit-net
+docker network create acs-net
 ```
 
 ### 5.4 Install PostgreSQL on the host
@@ -275,26 +275,20 @@ sudo systemctl enable postgresql && sudo systemctl start postgresql
 
 # Create database and user
 sudo -u postgres psql
-CREATE USER neyofit WITH PASSWORD '<strong password>';
-CREATE DATABASE neyofit OWNER neyofit;
+CREATE USER acs WITH PASSWORD '<strong password>';
+CREATE DATABASE access_control OWNER acs;
 \q
 ```
 
 Allow Docker containers to reach host PostgreSQL:
 
 ```bash
-# In /etc/postgresql/<version>/main/postgresql.conf
-# Change: listen_addresses = 'localhost'
-# To:     listen_addresses = '*'
-
 sudo nano /etc/postgresql/*/main/postgresql.conf
 # Set: listen_addresses = '*'
 
-# In /etc/postgresql/<version>/main/pg_hba.conf — add at the bottom:
-# host  neyofit  neyofit  172.17.0.0/16  md5
-
 sudo nano /etc/postgresql/*/main/pg_hba.conf
-# Add: host  neyofit  neyofit  172.17.0.0/16  md5
+# Add this line at the bottom:
+# host  access_control  acs  172.17.0.0/16  md5
 
 sudo systemctl restart postgresql
 ```
@@ -304,10 +298,10 @@ sudo systemctl restart postgresql
 ```bash
 sudo apt install -y certbot
 
-# Get certificate (replace with your domain)
-sudo certbot certonly --standalone -d mqtt.neyofit.io
+# Replace with your actual MQTT domain
+sudo certbot certonly --standalone -d mqtt.your-domain.com
 
-# Certificates will be at: /etc/letsencrypt/live/mqtt.neyofit.io/
+# Certificates will be at: /etc/letsencrypt/live/mqtt.your-domain.com/
 ```
 
 ### 5.6 Clone the repository
@@ -324,7 +318,7 @@ cd access-control-project
 
 ```bash
 cat > .env << 'EOF'
-MQTT_DOMAIN=mqtt.neyofit.io
+MQTT_DOMAIN=mqtt.your-domain.com
 EOF
 ```
 
@@ -332,31 +326,34 @@ EOF
 
 ```bash
 cat > backend/.env << 'EOF'
-DATABASE_URL=postgresql://neyofit:<password>@host.docker.internal:5432/neyofit
+DATABASE_URL=postgresql://acs:<password>@host.docker.internal:5432/access_control
 JWT_SECRET=<random 64 char string>
 JWT_REFRESH_SECRET=<random 64 char string>
 PORT=5001
 NODE_ENV=production
-MQTT_BROKER_URL=mqtt://neyofit-mqtt:1883
-MQTT_USERNAME=neyofit-backend
+MQTT_BROKER_URL=mqtt://acs-mqtt:1883
+MQTT_USERNAME=acs-backend
 MQTT_PASSWORD=<backend mqtt password>
-REDIS_HOST=neyofit-valkey
+REDIS_HOST=acs-valkey
 REDIS_PORT=6379
 SERVER_RSA_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 EOF
 ```
 
-> **`host.docker.internal`** resolves to your host machine from inside a Docker container.
-> On Linux you may need to add `--add-host=host.docker.internal:host-gateway` to the backend service in `docker-compose.yml`.
+> **Note:** On Linux, `host.docker.internal` may not resolve automatically. If the backend cannot connect to PostgreSQL, add this to the `backend` service in `docker-compose.yml`:
+> ```yaml
+> extra_hosts:
+>   - "host.docker.internal:host-gateway"
+> ```
 
 **`frontend/.env`**:
 
 ```bash
 cat > frontend/.env << 'EOF'
-NEXTAUTH_URL=https://app.neyofit.io
+NEXTAUTH_URL=https://app.your-domain.com
 NEXTAUTH_SECRET=<random 64 char string>
-NEXT_PUBLIC_API_URL=https://api.neyofit.io/api
-NEXT_PUBLIC_SOCKET_URL=https://api.neyofit.io
+NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
+NEXT_PUBLIC_SOCKET_URL=https://api.your-domain.com
 EOF
 ```
 
@@ -364,13 +361,16 @@ EOF
 
 ```bash
 cat > mosquitto/.env << 'EOF'
-MQTT_DOMAIN=mqtt.neyofit.io
-MQTT_BACKEND_USER=neyofit-backend
-MQTT_BACKEND_PASSWORD=<backend mqtt password>   # same as MQTT_PASSWORD in backend/.env
-MQTT_DEVICE_USER=neyofit-device
-MQTT_DEVICE_PASSWORD=<device mqtt password>     # same as MQTT_PASS in NeyoFit_Access.ino
+MQTT_DOMAIN=mqtt.your-domain.com
+MQTT_BACKEND_USER=acs-backend
+MQTT_BACKEND_PASSWORD=<backend mqtt password>
+MQTT_DEVICE_USER=acs-device
+MQTT_DEVICE_PASSWORD=<device mqtt password>
 EOF
 ```
+
+> `MQTT_BACKEND_PASSWORD` must match `MQTT_PASSWORD` in `backend/.env`.
+> `MQTT_DEVICE_PASSWORD` must match `MQTT_PASS` in `NeyoFit_Access.ino`.
 
 ### 5.8 Run database migrations
 
@@ -387,13 +387,13 @@ cd ..
 ### 5.9 Build and start all containers
 
 ```bash
-bash rebuild-akshardaan-foundation.sh
+bash rebuild-access-control-system.sh
 ```
 
 This will:
 1. Stop and remove existing containers
 2. Rebuild all images from source (no cache)
-3. Start: `neyofit-valkey` → `neyofit-mqtt` → `neyofit-backend` → `neyofit-frontend`
+3. Start in order: `acs-valkey` → `acs-mqtt` → `acs-backend` → `acs-frontend`
 
 Verify everything is running:
 
@@ -407,15 +407,14 @@ docker compose logs -f
 ```bash
 sudo apt install -y nginx
 
-# Create config
-sudo nano /etc/nginx/sites-available/neyofit
+sudo nano /etc/nginx/sites-available/access-control
 ```
 
 ```nginx
-# API
+# API + WebSocket
 server {
     listen 80;
-    server_name api.neyofit.io;
+    server_name api.your-domain.com;
     location / {
         proxy_pass http://localhost:5001;
         proxy_http_version 1.1;
@@ -428,7 +427,7 @@ server {
 # Frontend
 server {
     listen 80;
-    server_name app.neyofit.io;
+    server_name app.your-domain.com;
     location / {
         proxy_pass http://localhost:3000;
         proxy_set_header Host $host;
@@ -437,11 +436,11 @@ server {
 ```
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/neyofit /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/access-control /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 
 # Add HTTPS
-sudo certbot --nginx -d api.neyofit.io -d app.neyofit.io
+sudo certbot --nginx -d api.your-domain.com -d app.your-domain.com
 ```
 
 ### 5.11 Register ESP32 devices
@@ -450,7 +449,7 @@ After deployment, for each physical device:
 
 1. Flash `NeyoFit_Access.ino` to the ESP32
 2. On first boot, blue LED turns on (~30 seconds) — device generates its RSA key pair
-3. Connect the device to WiFi via the captive portal (`NeyoFit-XXXX` AP)
+3. Connect the device to WiFi via the captive portal (`ACS-XXXX` AP)
 4. Open `http://<device-ip>/` in a browser
 5. Under **Crypto / Registration** → click **Show & copy to admin panel**
 6. In the system dashboard → **Devices** → **Edit** the device → paste the public key → Save
@@ -462,7 +461,7 @@ After deployment, for each physical device:
 
 ```bash
 # Rebuild a single service only
-bash rebuild-akshardaan-foundation.sh backend
+bash rebuild-access-control-system.sh backend
 
 # View live logs
 docker compose logs -f backend
@@ -472,8 +471,8 @@ docker compose logs -f mosquitto
 docker compose restart backend
 
 # Open a shell inside a container
-docker exec -it neyofit-backend sh
+docker exec -it acs-backend sh
 
-# Check MQTT messages (from inside the server)
-docker exec -it neyofit-mqtt mosquitto_sub -t 'neyofit/#' -v -u neyofit-backend -P <password>
+# Monitor MQTT messages live (from inside the server)
+docker exec -it acs-mqtt mosquitto_sub -t 'acs/#' -v -u acs-backend -P <password>
 ```

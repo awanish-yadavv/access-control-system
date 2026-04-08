@@ -9,8 +9,8 @@ import { AccessLog } from '../access-log/access-log.entity';
 import { tenantHasActiveSubscription } from './tenant-schema.service';
 import { emitAccessEvent } from './socket.service';
 
-const TOPIC_INBOUND  = 'neyofit/access';
-const TOPIC_RESPONSE = (deviceId: string) => `neyofit/response/${deviceId}`;
+const TOPIC_INBOUND  = 'acs/access';
+const TOPIC_RESPONSE = (deviceId: string) => `acs/response/${deviceId}`;
 const MAX_AGE_SECONDS = 30;
 
 // ── Wire formats ─────────────────────────────────────────────────────────────
@@ -54,7 +54,7 @@ export const initMQTT = (): void => {
 
   const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
   client = mqtt.connect(brokerUrl, {
-    clientId: `neyofit-backend-${uuidv4().slice(0, 8)}`,
+    clientId: `acs-backend-${uuidv4().slice(0, 8)}`,
     clean: true,
     reconnectPeriod: 5000,
     username: process.env.MQTT_USERNAME,

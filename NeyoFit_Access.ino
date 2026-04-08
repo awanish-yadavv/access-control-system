@@ -117,7 +117,7 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 // -----------------------------------------------------------------------------
 // NVS Keys
 // -----------------------------------------------------------------------------
-#define PREFS_NAMESPACE        "neyofit"
+#define PREFS_NAMESPACE        "acs"
 #define PREFS_KEY_DEVICE_PRIV  "devPrivKey"   // RSA-2048 private key PEM (~1700 bytes)
 #define PREFS_KEY_DEVICE_PUB   "devPubKey"    // RSA-2048 public key PEM  (~450 bytes)
 #define PREFS_KEY_KEY_READY    "keyReady"     // bool: key pair generated
@@ -139,8 +139,8 @@ DQIDAQAB
 // -----------------------------------------------------------------------------
 // MQTT Topics
 // -----------------------------------------------------------------------------
-#define MQTT_PUBLISH_TOPIC  "neyofit/access"
-#define MQTT_RESPONSE_BASE  "neyofit/response/"
+#define MQTT_PUBLISH_TOPIC  "acs/access"
+#define MQTT_RESPONSE_BASE  "acs/response/"
 
 // -----------------------------------------------------------------------------
 // Buzzer Sequences (non-blocking step sequencer)
@@ -207,7 +207,7 @@ String getMacDeviceId() {
 }
 
 String buildApName() {
-    return String("NeyoFit-") + deviceId.substring(8); // last 4 hex chars of MAC
+    return String("ACS-") + deviceId.substring(8); // last 4 hex chars of MAC
 }
 
 // =============================================================================
@@ -241,7 +241,7 @@ void ensureKeyPair() {
     mbedtls_entropy_init(&entropy);
     mbedtls_ctr_drbg_init(&ctr_drbg);
 
-    const char* pers = "neyofit_keygen";
+    const char* pers = "acs_keygen";
     mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
                            (const unsigned char*)pers, strlen(pers));
     mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
@@ -398,7 +398,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     mbedtls_entropy_init(&entropy);
     mbedtls_ctr_drbg_init(&ctr_drbg);
 
-    const char* pers = "neyofit_dec";
+    const char* pers = "acs_dec";
     mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
                            (const unsigned char*)pers, strlen(pers));
     mbedtls_pk_parse_key(&pk,
@@ -515,7 +515,7 @@ void publishAccessRequest(const String &uid) {
     mbedtls_entropy_init(&entropy);
     mbedtls_ctr_drbg_init(&ctr_drbg);
 
-    const char* pers = "neyofit_enc";
+    const char* pers = "acs_enc";
     mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
                            (const unsigned char*)pers, strlen(pers));
 
@@ -675,7 +675,7 @@ void handleRoot() {
         "<meta charset='UTF-8'>"
         "<meta http-equiv='refresh' content='4'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-        "<title>NeyoFit Device</title>"
+        "<title>ACS Device</title>"
         "<style>"
         "body{font-family:monospace;background:#111;color:#ddd;padding:16px;max-width:500px;margin:auto}"
         "h2{color:#4af;margin:0 0 4px}p.sub{color:#555;margin:0 0 20px;font-size:.85em}"
@@ -687,7 +687,7 @@ void handleRoot() {
         "</style></head><body>"
     ));
 
-    webServer.sendContent(F("<h2>NeyoFit Access Device</h2>"));
+    webServer.sendContent(F("<h2>Access Control Device</h2>"));
     webServer.sendContent("<p class='sub'>Auto-refresh every 4s &nbsp;|&nbsp; IP: " + WiFi.localIP().toString() + "</p>");
 
     // --- Boot Checklist ---
@@ -785,7 +785,7 @@ void setup() {
     Serial.begin(115200);
     delay(100);
     Serial.println("\n==============================");
-    Serial.println("  NeyoFit Access Control");
+    Serial.println("  Access Control System");
     Serial.println("==============================");
 
     // LEDs and buzzer
