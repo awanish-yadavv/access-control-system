@@ -1,0 +1,17 @@
+# ══════════════════════════════════════════════════════════════
+# NeyoFit MQTT — Access Control List
+# Generated from this template by entrypoint.sh
+#
+# Topics:
+#   neyofit/access          ← ESP32 publishes card scans
+#   neyofit/response/{mac}  ← Backend publishes access decisions
+# ══════════════════════════════════════════════════════════════
+
+# ── Backend: full access ───────────────────────────────────────
+user ${MQTT_BACKEND_USER}
+topic readwrite #
+
+# ── Devices: publish scans, receive responses ──────────────────
+user ${MQTT_DEVICE_USER}
+topic write neyofit/access
+topic read  neyofit/response/#

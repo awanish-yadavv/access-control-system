@@ -1,0 +1,80 @@
+services:
+
+  # ── Valkey (Redis-compatible) — BullMQ job queue ────────────────────────────
+  # Uses the official valkey image directly — pull once: docker pull valkey/valkey:latest
+  valkey:
+    image: valkey/valkey:latest
+    container_name: neyofit-valkey
+    restart: unless-stopped
+    networks:
+      - neyofit-net
+
+  # ── Mosquitto MQTT Broker ───────────────────────────────────────────────────
+  # Port 8883 (TLS) is public — ESP32 devices connect here from the internet.
+  # Port 1883 is internal only — backend reaches it via Docker network (no TLS).
+  # Credentials and ACL are generated at startup from mosquitto/.env (never in files).
+  # TLS cert path: /etc/letsencrypt/live/${MQTT_DOMAIN}  (set MQTT_DOMAIN in root .env)
+  # Custom build needed — entrypoint.sh generates passwords/ACL from env vars at startup.
+  mosquitto:
+    build: ./mosquitto
+    image: neyofit-mqtt:latest
+    container_name: neyofit-mqtt
+    restart: unless-stopped
+    env_file: ./mosquitto/.env
+    ports:
+      - "8883:8883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/config/acl.conf.template:/mosquitto/config/acl.conf.template:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+      - /etc/letsencrypt/live/${MQTT_DOMAIN}:/mosquitto/certs:ro
+    networks:
+      - neyofit-net
+
+  # ── Backend (Node.js + Express + TypeORM) ──────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: neyofit-backend:latest
+    container_name: neyofit-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override localhost values from .env with Docker container hostnames
+      MQTT_BROKER_URL: mqtt://neyofit-mqtt:1883
+      REDIS_HOST: neyofit-valkey
+      REDIS_PORT: "6379"
+      # If PostgreSQL runs on the host machine (not in Docker):
+      # DATABASE_URL: postgresql://<user>:<pass>@host.docker.internal:5432/neyofit
+    depends_on:
+      - valkey
+      - mosquitto
+    networks:
+      - neyofit-net
+
+  # ── Frontend (Next.js) ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: neyofit-frontend:latest
+    container_name: neyofit-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - backend
+    networks:
+      - neyofit-net
+
+networks:
+  neyofit-net:
+    external: true
+    name: neyofit-net
