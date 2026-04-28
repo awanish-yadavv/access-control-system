@@ -56,6 +56,9 @@ services:
       - mosquitto
     networks:
       - acs-net
+    # Lets the backend reach PostgreSQL running on the Docker host (Linux needs this).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ── Frontend (Next.js) ──────────────────────────────────────────────────────
   frontend:
