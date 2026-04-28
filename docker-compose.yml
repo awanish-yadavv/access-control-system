@@ -28,7 +28,10 @@ services:
       - ./mosquitto/config/acl.conf.template:/mosquitto/config/acl.conf.template:ro
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
-      - /etc/letsencrypt/live/${MQTT_DOMAIN}:/mosquitto/certs:ro
+      # Mount the whole letsencrypt tree so the live/* symlinks (which point
+      # into ../../archive) resolve correctly inside the container.
+      # The entrypoint copies the resolved certs into /mosquitto/certs/.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - acs-net
 
