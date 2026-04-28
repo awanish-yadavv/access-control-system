@@ -1,3 +1,5 @@
 .vscode
 .claude
 CLAUDE.md
+.env
+*.env

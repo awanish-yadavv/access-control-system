@@ -21,6 +21,7 @@ const SYSTEM_ADMIN_MATRIX: EntityPermissionMatrix = {
   customer_subscriptions:  { create: true, read: true, list: true, update: true, delete: true, export: true, manage: true },
   customer_invoices:       { create: true, read: true, list: true, update: true, delete: true, export: true, manage: true },
   access_logs:             { create: true, read: true, list: true, update: true, delete: true, export: true, manage: true },
+  settings:                { create: true, read: true, list: true, update: true, delete: true, export: true, manage: true },
 };
 
 const TENANT_ADMIN_MATRIX: EntityPermissionMatrix = {

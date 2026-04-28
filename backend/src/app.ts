@@ -53,7 +53,7 @@ async function bootstrap() {
 
   // 6. Start listening
   httpServer.listen(PORT, () => {
-    console.log(`[Server] NeyoFit backend running on http://localhost:${PORT}`);
+    console.log(`[Server] Access Control System backend running on http://localhost:${PORT}`);
   });
 }
 

@@ -3,6 +3,11 @@ import { Unbounded, Barlow_Condensed } from 'next/font/google';
 import './globals.css';
 import Providers from './providers';
 
+export const generateMetadata = (): Metadata => ({
+  title: `${process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'} — Access Control`,
+  description: 'Multi-tenant IoT access control platform',
+});
+
 const unbounded = Unbounded({
   variable: '--font-brand',
   subsets: ['latin'],
@@ -15,10 +20,6 @@ const barlowCondensed = Barlow_Condensed({
   weight: ['300', '400', '500', '600', '700'],
 });
 
-export const metadata: Metadata = {
-  title: 'NeyoFit — Access Control',
-  description: 'Multi-tenant IoT access control platform',
-};
 
 const RootLayout = ({ children }: { children: React.ReactNode }) => (
   <html lang="en" className={`${unbounded.variable} ${barlowCondensed.variable} h-full`}>

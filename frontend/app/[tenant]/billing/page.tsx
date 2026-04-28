@@ -121,7 +121,7 @@ const MyPlanTab = ({ tenantId }: { tenantId: string }) => {
       ) : (
         <div className="bg-card border border-border rounded-xl p-10 text-center">
           <div className="text-[9px] font-mono tracking-[0.18em] uppercase text-muted-foreground mb-2">No Active Plan</div>
-          <div className="text-[13px] text-muted-foreground">Contact NeyoFit to subscribe to a platform plan.</div>
+          <div className="text-[13px] text-muted-foreground">Contact {process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'} to subscribe to a platform plan.</div>
         </div>
       )}
 
@@ -159,7 +159,7 @@ const MyPlanTab = ({ tenantId }: { tenantId: string }) => {
   );
 };
 
-// ── Tab 2: NeyoFit Invoices ───────────────────────────────────────────────────
+// ── Tab 2: Platform Invoices ──────────────────────────────────────────────────
 
 const PlatformInvoicesTab = ({ tenantId }: { tenantId: string }) => {
   const [invoices, setInvoices] = useState<TenantInvoice[]>([]);
@@ -274,7 +274,7 @@ type Tab = 'myplan' | 'invoices';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'myplan',   label: 'My Plan' },
-  { id: 'invoices', label: 'NeyoFit Invoices' },
+  { id: 'invoices', label: `${process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'} Invoices` },
 ];
 
 const TenantBillingPage = () => {
@@ -286,7 +286,7 @@ const TenantBillingPage = () => {
       <div className="mb-5">
         <h1 className="text-sm font-bold tracking-[0.04em] text-foreground uppercase">Billing</h1>
         <p className="font-mono text-[10px] text-muted-foreground tracking-[0.06em] mt-1">
-          Your NeyoFit platform subscription &amp; invoices
+          Your {process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'} platform subscription &amp; invoices
         </p>
       </div>
 

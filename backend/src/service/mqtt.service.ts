@@ -70,7 +70,7 @@ export const initMQTT = (): void => {
   });
 
   client.on('reconnect', () => console.log('[MQTT] Reconnecting...'));
-  client.on('error', (err) => console.error('[MQTT] Error:', err.message));
+  client.on('error', (err) => console.error('[MQTT] Error:', err.message || err));
 
   client.on('message', async (topic, messageBuffer) => {
     if (topic !== TOPIC_INBOUND) return;

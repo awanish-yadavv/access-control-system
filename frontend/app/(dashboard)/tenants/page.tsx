@@ -312,7 +312,7 @@ const TenantsPage = () => {
             <div className="text-[9px] font-mono tracking-[0.14em] uppercase text-muted-foreground mb-3">Platform Plan (optional)</div>
 
             <SearchDrop
-              label="NeyoFit Plan"
+              label={`${process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'} Plan`}
               value={planId}
               display={selectedPlan ? `${selectedPlan.name} — $${Number(selectedPlan.price).toFixed(2)}` : ''}
               options={plans.map(p => ({ id: p.id, label: p.name, sub: `$${Number(p.price).toFixed(2)}` }))}

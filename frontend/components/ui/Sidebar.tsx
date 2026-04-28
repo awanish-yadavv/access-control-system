@@ -59,7 +59,7 @@ const Sidebar = ({ userType, email }: SidebarProps) => {
           <LockIcon />
         </div>
         <div>
-          <div className="text-[11px] font-bold tracking-[0.04em] text-sidebar-foreground uppercase">NEYOFIT</div>
+          <div className="text-[11px] font-bold tracking-[0.04em] text-sidebar-foreground uppercase">{process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'}</div>
           <div className="text-[8px] font-mono text-sidebar-ring tracking-[0.12em] uppercase">ACCESS OS</div>
         </div>
       </div>

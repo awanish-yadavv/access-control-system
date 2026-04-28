@@ -44,7 +44,7 @@ const LoginPage = () => {
             </svg>
           </div>
           <div>
-            <div className="text-[13px] font-bold tracking-[0.04em] text-foreground uppercase">NEYOFIT</div>
+            <div className="text-[13px] font-bold tracking-[0.04em] text-foreground uppercase">{process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'}</div>
             <div className="text-[9px] font-mono text-primary tracking-[0.14em] uppercase">ACCESS OS</div>
           </div>
         </div>
@@ -65,7 +65,7 @@ const LoginPage = () => {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              placeholder="admin@neyofit.io"
+              placeholder={`admin@${(process.env.NEXT_PUBLIC_PLATFORM_NAME || 'platform').toLowerCase()}.io`}
               className="w-full bg-secondary border border-border rounded-md px-3.5 py-2.5 text-foreground font-mono text-xs outline-none focus:border-primary transition-colors"
             />
           </div>

@@ -131,7 +131,7 @@ const SystemSettingsPage = () => {
           label="Platform Legal Name"
           value={platformLegalName}
           onChange={setPlatformLegalName}
-          placeholder="NeyoFit Technologies Pvt Ltd"
+          placeholder={`${process.env.NEXT_PUBLIC_PLATFORM_NAME || 'Platform'} Technologies Pvt Ltd`}
         />
         <div>
           <label className="block text-[9px] font-mono tracking-[0.14em] uppercase text-muted-foreground mb-1.5">Platform Address</label>

@@ -60,12 +60,27 @@
 #define PIN_BUZZER     33
 
 // -----------------------------------------------------------------------------
+// Environment — comment out LOCAL_DEV before flashing for production
+// -----------------------------------------------------------------------------
+#define LOCAL_DEV
+
+// -----------------------------------------------------------------------------
 // Server Configuration
 // -----------------------------------------------------------------------------
-#define MQTT_BROKER  "mqtt.neyofit.io"   // Your broker domain (used for TLS SNI)
-#define MQTT_PORT    8883                 // TLS port (public, for ESP32 devices)
-#define MQTT_USER    "neyofit-device"     // Must match MQTT_DEVICE_USER in mosquitto/.env
-#define MQTT_PASS    ""                   // Must match MQTT_DEVICE_PASSWORD in mosquitto/.env
+#ifdef LOCAL_DEV
+  // Local dev: plain TCP, no credentials, broker = Mac's local IP
+  // Find your IP with: ipconfig getifaddr en0
+  #define MQTT_BROKER  "192.168.x.x"   // ← replace with your Mac's local IP
+  #define MQTT_PORT    1883
+  #define MQTT_USER    ""
+  #define MQTT_PASS    ""
+#else
+  // Production: TLS, broker domain, device credentials
+  #define MQTT_BROKER  "mqtt.your-domain.com"
+  #define MQTT_PORT    8883
+  #define MQTT_USER    "acs-device"
+  #define MQTT_PASS    ""               // set before flashing for production
+#endif
 
 // Let's Encrypt ISRG Root X1 CA — valid until 2035-09-30.
 // If your cert chain changes, replace this with the new root CA PEM.
@@ -168,7 +183,11 @@ String apName;
 String devicePublicKeyPem = "";   // loaded from NVS — shown on web dashboard for admin to copy
 bool   cryptoReady        = false;
 
+#ifdef LOCAL_DEV
+WiFiClient       wifiClient;
+#else
 WiFiClientSecure wifiClient;
+#endif
 PubSubClient     mqttClient(wifiClient);
 MFRC522      rfid(PIN_RFID_SDA, PIN_RFID_RST);
 Preferences  prefs;
@@ -448,7 +467,9 @@ bool mqttConnect() {
     Serial.printf("[MQTT] Connecting to %s:%d as '%s'...\n",
         MQTT_BROKER, MQTT_PORT, deviceId.c_str());
 
+#ifndef LOCAL_DEV
     wifiClient.setCACert(ROOT_CA);           // Verify broker TLS cert against ISRG Root X1
+#endif
     mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
     mqttClient.setBufferSize(600);           // Encrypted ct field is ~380 bytes + JSON overhead
     mqttClient.setSocketTimeout(5);          // TLS handshake needs more time than plain TCP
