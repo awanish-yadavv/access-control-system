@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "tsc",
-    "start": "node -r module-alias/register dist/app.js",
+    "start": "node dist/app.js",
     "migration:generate": "ts-node -r reflect-metadata node_modules/typeorm/cli.js migration:generate",
     "migration:run": "ts-node -r reflect-metadata node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
     "migration:revert": "ts-node -r reflect-metadata node_modules/typeorm/cli.js migration:revert -d src/data-source.ts",

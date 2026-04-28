@@ -20,4 +20,4 @@ COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 5001
 
-CMD ["node", "-r", "module-alias/register", "dist/app.js"]
+CMD ["node", "dist/app.js"]
