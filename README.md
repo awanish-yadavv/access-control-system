@@ -374,15 +374,27 @@ EOF
 
 ### 5.8 Run database migrations
 
+PostgreSQL runs on the host (not in Docker), so `psql` is invoked directly on the server.
+
 ```bash
 cd backend
 npm install
+
+# 1. Apply the initial SQL schema (creates the `system` schema + base tables).
+#    Required on a fresh database — the ts-node scripts below only ALTER existing tables.
+set -a && source .env && set +a
+psql "$DATABASE_URL" -f migrations/001_InitialSchema.sql
+
+# 2. Apply incremental migrations and seed data.
 npx ts-node src/scripts/migrate-system.ts
 npx ts-node src/scripts/migrate-tenants.ts
 npx ts-node src/scripts/migrate-device-pubkey.ts
 npx ts-node src/scripts/seed.ts
 cd ..
 ```
+
+> `001_InitialSchema.sql` uses `IF NOT EXISTS` everywhere, so it's safe to re-run.
+> `002_TenantSchemaTemplate.sql` is **not** applied here — it's invoked dynamically by `TenantSchemaService.provision()` each time a new tenant is created.
 
 ### 5.9 Build and start all containers
 
