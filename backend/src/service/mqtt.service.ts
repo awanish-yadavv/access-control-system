@@ -184,22 +184,17 @@ async function handleAccessRequest(raw: string): Promise<void> {
 
   // ── 10. Card must be active ───────────────────────────────────────────────
   if (card.status !== 'active') {
-    await log(device.id, cardUid, tenantId, card.assignedToId, 'denied', 'CARD_INACTIVE', traceId);
+    await log(device.id, cardUid, tenantId, null, 'denied', 'CARD_INACTIVE', traceId);
     return respond(rawMac, device.publicKey, false, 'CARD_INACTIVE', traceId);
   }
 
-  // ── 11. Card must be assigned to a customer ──────────────────────────────
-  // Authoritative source is tenant_X.my_cards.customer_id (set by tenant UI).
-  // system.cards.assigned_to is mirrored from it but may lag for legacy rows.
-  let customerId: string | null = card.assignedToId;
-  if (!customerId) {
-    const schema = tenantSchemaName(tenantId);
-    const rows = await AppDataSource.query(
-      `SELECT customer_id FROM "${schema}".my_cards WHERE card_id = $1`,
-      [card.id],
-    ) as { customer_id: string | null }[];
-    customerId = rows[0]?.customer_id ?? null;
-  }
+  // ── 11. Card must be assigned to a customer in this tenant ────────────────
+  const schema = tenantSchemaName(tenantId);
+  const myCardRows = await AppDataSource.query(
+    `SELECT customer_id FROM "${schema}".my_cards WHERE card_id = $1`,
+    [card.id],
+  ) as { customer_id: string | null }[];
+  const customerId = myCardRows[0]?.customer_id ?? null;
   if (!customerId) {
     await log(device.id, cardUid, tenantId, null, 'denied', 'CARD_UNASSIGNED', traceId);
     return respond(rawMac, device.publicKey, false, 'CARD_UNASSIGNED', traceId);

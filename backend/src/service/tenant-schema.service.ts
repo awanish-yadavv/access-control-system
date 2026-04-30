@@ -217,14 +217,6 @@ export async function updateTenantCard(
     vals,
   );
   if (!rows.length) throw new Error('Card record not found');
-  // Mirror customer assignment into system.cards.assigned_to so the MQTT access
-  // check (which reads system.cards) sees the same customer the tenant just set.
-  if ('customerId' in updates) {
-    await AppDataSource.query(
-      `UPDATE system.cards SET assigned_to = $1 WHERE id = $2`,
-      [updates.customerId ?? null, rows[0].card_id],
-    );
-  }
   return rows[0];
 }
 

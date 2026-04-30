@@ -10,7 +10,7 @@ const repo = () => AppDataSource.getRepository(Card);
 export const listCards = async (req: Request, res: Response): Promise<void> => {
   const caller = req.user!;
   const where = caller.userType === 'SYSTEM' ? {} : { tenantId: caller.tenantId ?? undefined };
-  apiSuccess(res, await repo().find({ where, relations: ['tenant', 'assignedTo'] }), 'Cards fetched', 200);
+  apiSuccess(res, await repo().find({ where, relations: ['tenant'] }), 'Cards fetched', 200);
 };
 
 export const getCard = async (req: Request, res: Response): Promise<void> => {
@@ -49,9 +49,9 @@ export const assignCard = async (req: Request, res: Response): Promise<void> => 
   const { tenantId, customerId, label } = req.body;
   const card = await repo().findOne({ where: { id: param(req, 'id') } });
   if (!card) { apiError(res, null, 'Card not found', 404); return; }
-  card.tenantId    = tenantId     ?? card.tenantId;
-  card.assignedToId = customerId  ?? card.assignedToId;
+  card.tenantId = tenantId ?? card.tenantId;
   await repo().save(card);
+  // Customer assignment lives in tenant_<id>.my_cards.customer_id (tenant-private fact)
   if (tenantId) await assignCardToTenant(tenantId, card.id, customerId, label);
   apiSuccess(res, card, 'Card assigned', 200);
 };

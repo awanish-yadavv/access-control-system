@@ -13,7 +13,6 @@ interface Card {
   status: 'active' | 'inactive';
   createdAt: string;
   tenant: { id: string; name: string } | null;
-  assignedTo: { id: string; email: string } | null;
 }
 
 interface TenantOption {
@@ -217,21 +216,20 @@ const CardsPage = () => {
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-border">
-              {['UID', 'Tenant', 'Assigned To', 'Status', 'Registered', 'Actions'].map(h => (
+              {['UID', 'Tenant', 'Status', 'Registered', 'Actions'].map(h => (
                 <th key={h} className="font-mono text-[9px] tracking-[0.14em] uppercase text-muted-foreground px-5 py-2.5 text-left font-normal">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-10 text-center font-mono text-[11px] text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={5} className="p-10 text-center font-mono text-[11px] text-muted-foreground">Loading...</td></tr>
             ) : cards.length === 0 ? (
-              <tr><td colSpan={6} className="p-10 text-center font-mono text-[11px] text-muted-foreground">No cards registered</td></tr>
+              <tr><td colSpan={5} className="p-10 text-center font-mono text-[11px] text-muted-foreground">No cards registered</td></tr>
             ) : cards.map(c => (
               <tr key={c.id} className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors group">
                 <td className="px-5 py-3 font-mono text-xs text-primary tracking-[0.08em]">{c.uid}</td>
                 <td className="px-5 py-3 text-[13px] text-foreground">{c.tenant?.name ?? <span className="font-mono text-[10px] text-muted-foreground">Unissued</span>}</td>
-                <td className="px-5 py-3 text-[12px] text-muted-foreground">{c.assignedTo?.email ?? '—'}</td>
                 <td className="px-5 py-3">
                   <span className={cn(
                     'font-mono text-[9px] tracking-[0.1em] uppercase px-2 py-0.5 rounded-[3px] border',
