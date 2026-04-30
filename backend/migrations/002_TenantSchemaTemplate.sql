@@ -22,16 +22,6 @@ CREATE TABLE IF NOT EXISTS "tenant_:tenantId".my_devices (
 );
 CREATE INDEX IF NOT EXISTS idx_my_devices_device ON "tenant_:tenantId".my_devices(device_id);
 
--- ── Card-device access rules ──────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS "tenant_:tenantId".card_access_rules (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    my_card_id   UUID NOT NULL REFERENCES "tenant_:tenantId".my_cards(id)   ON DELETE CASCADE,
-    my_device_id UUID NOT NULL REFERENCES "tenant_:tenantId".my_devices(id) ON DELETE CASCADE,
-    UNIQUE (my_card_id, my_device_id)
-);
-CREATE INDEX IF NOT EXISTS idx_car_card   ON "tenant_:tenantId".card_access_rules(my_card_id);
-CREATE INDEX IF NOT EXISTS idx_car_device ON "tenant_:tenantId".card_access_rules(my_device_id);
-
 -- ── Cards issued to this tenant ───────────────────────────────
 CREATE TABLE IF NOT EXISTS "tenant_:tenantId".my_cards (
     id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -43,6 +33,16 @@ CREATE TABLE IF NOT EXISTS "tenant_:tenantId".my_cards (
 );
 CREATE INDEX IF NOT EXISTS idx_my_cards_card     ON "tenant_:tenantId".my_cards(card_id);
 CREATE INDEX IF NOT EXISTS idx_my_cards_customer ON "tenant_:tenantId".my_cards(customer_id);
+
+-- ── Card-device access rules ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "tenant_:tenantId".card_access_rules (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    my_card_id   UUID NOT NULL REFERENCES "tenant_:tenantId".my_cards(id)   ON DELETE CASCADE,
+    my_device_id UUID NOT NULL REFERENCES "tenant_:tenantId".my_devices(id) ON DELETE CASCADE,
+    UNIQUE (my_card_id, my_device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_car_card   ON "tenant_:tenantId".card_access_rules(my_card_id);
+CREATE INDEX IF NOT EXISTS idx_car_device ON "tenant_:tenantId".card_access_rules(my_device_id);
 
 -- ── Customers belonging to this tenant ───────────────────────
 CREATE TABLE IF NOT EXISTS "tenant_:tenantId".my_customers (
