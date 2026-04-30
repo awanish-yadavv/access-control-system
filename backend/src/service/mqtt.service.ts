@@ -6,7 +6,7 @@ import { Device } from '../device/device.entity';
 import { Card } from '../card/card.entity';
 import { Tenant } from '../tenant/tenant.entity';
 import { AccessLog } from '../access-log/access-log.entity';
-import { tenantHasActiveSubscription } from './tenant-schema.service';
+import { tenantHasActiveSubscription, tenantSchemaName } from './tenant-schema.service';
 import { emitAccessEvent } from './socket.service';
 
 const TOPIC_INBOUND  = 'acs/access';
@@ -189,13 +189,24 @@ async function handleAccessRequest(raw: string): Promise<void> {
   }
 
   // ── 11. Card must be assigned to a customer ──────────────────────────────
-  if (!card.assignedToId) {
+  // Authoritative source is tenant_X.my_cards.customer_id (set by tenant UI).
+  // system.cards.assigned_to is mirrored from it but may lag for legacy rows.
+  let customerId: string | null = card.assignedToId;
+  if (!customerId) {
+    const schema = tenantSchemaName(tenantId);
+    const rows = await AppDataSource.query(
+      `SELECT customer_id FROM "${schema}".my_cards WHERE card_id = $1`,
+      [card.id],
+    ) as { customer_id: string | null }[];
+    customerId = rows[0]?.customer_id ?? null;
+  }
+  if (!customerId) {
     await log(device.id, cardUid, tenantId, null, 'denied', 'CARD_UNASSIGNED', traceId);
     return respond(rawMac, device.publicKey, false, 'CARD_UNASSIGNED', traceId);
   }
 
   // ── 12. GRANT ─────────────────────────────────────────────────────────────
-  await log(device.id, cardUid, tenantId, card.assignedToId, 'granted', 'ACCESS_GRANTED', traceId);
+  await log(device.id, cardUid, tenantId, customerId, 'granted', 'ACCESS_GRANTED', traceId);
   respond(rawMac, device.publicKey, true, 'ACCESS_GRANTED', traceId);
 }
 

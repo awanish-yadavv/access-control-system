@@ -58,6 +58,7 @@
 #include <esp_mac.h>          // esp_read_mac() — reliable MAC even before WiFi init
 #include <mbedtls/pk.h>
 #include <mbedtls/rsa.h>
+#include <mbedtls/md.h>
 #include <mbedtls/entropy.h>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/base64.h>
@@ -448,12 +449,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     memcpy(buf, payload, length);
     buf[length] = '\0';
 
-    Serial.printf("[MQTT] ← %s (encrypted response received)\n", topic);
+    Serial.printf("[MQTT] ← %s (%u bytes)\n", topic, length);
+    Serial.printf("[MQTT] raw: %s\n", buf);
 
-    // Parse outer envelope
-    StaticJsonDocument<512> outer;
-    if (deserializeJson(outer, buf) != DeserializationError::Ok) {
-        Serial.println("[MQTT] JSON parse error on response");
+    // Parse outer envelope (allocate generous heap doc — base64 ct ~344 chars)
+    DynamicJsonDocument outer(1024);
+    auto perr = deserializeJson(outer, buf);
+    if (perr != DeserializationError::Ok) {
+        Serial.printf("[MQTT] JSON parse error on response: %s\n", perr.c_str());
         return;
     }
     const char* ct = outer["ct"] | nullptr;
@@ -489,6 +492,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     mbedtls_pk_parse_key(&pk,
         (const unsigned char*)privKeyPem.c_str(), privKeyPem.length() + 1,
         nullptr, 0, mbedtls_ctr_drbg_random, &ctr_drbg);
+
+    // mbedtls_pk_decrypt defaults to PKCS#1 v1.5; backend uses OAEP-SHA1 (Node default)
+    mbedtls_rsa_set_padding(mbedtls_pk_rsa(pk), MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
 
     unsigned char plaintext[256];
     size_t plainLen = 0;
@@ -616,6 +622,9 @@ void publishAccessRequest(const String &uid) {
     String srvPub = String(SERVER_PUBLIC_KEY);
     mbedtls_pk_parse_public_key(&pk,
         (const unsigned char*)srvPub.c_str(), srvPub.length() + 1);
+
+    // mbedtls_pk_encrypt defaults to PKCS#1 v1.5; backend uses OAEP-SHA1 (Node default)
+    mbedtls_rsa_set_padding(mbedtls_pk_rsa(pk), MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
 
     unsigned char ciphertext[256] = {};   // RSA-2048 output is always 256 bytes
     size_t outLen = 0;
