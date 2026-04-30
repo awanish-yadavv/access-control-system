@@ -1,5 +1,5 @@
 // =============================================================================
-// NeyoFit Access Control — ESP32 + RC522 RFID
+// NeyoFit Access Control — ESP32 + RC522 RFID  (firmware for the lock device)
 // =============================================================================
 // Hardware:
 //   RC522       → SDA=D5, SCK=D18, MOSI=D23, MISO=D19, RST=D22 (3.3V)
@@ -11,15 +11,37 @@
 //   LED Blue    → D14 (RFID Activity)
 //   Buzzer      → D33 Signal (3-pin module, VCC=3V3)
 //
-// Libraries (install via Arduino IDE Library Manager):
+// Libraries (Arduino IDE → Library Manager):
 //   - WiFiManager       by tzapu           v2.0.x
 //   - PubSubClient      by Nick O'Leary    v2.8.x
 //   - ArduinoJson       by Benoit Blanchon v6.x
 //   - MFRC522           by GithubCommunity v1.4.x
 //
-// NOTE: Before uploading for a clean start (clears saved WiFi + Tenant ID):
-//   Tools → Erase All Flash Before Sketch Upload → All Flash Contents
+// Deployment context (see project README.md for full details):
+//   - Broker:   acs-mqtt container, port 8883 TLS, cert from Let's Encrypt
+//               (docker-compose.yml service "mosquitto", NGINX.md §6 — MQTT
+//                is NOT proxied through nginx, ESP32 connects directly).
+//   - Backend:  acs-backend container, decrypts payload, validates card,
+//               replies on acs/response/<deviceId>.
+//   - Identity: device MAC = device ID (no tenant ID on device — resolved
+//               server-side from the device record).
+//   - Crypto:   per-device RSA-2048 generated on first boot, stored in NVS.
+//               Server public key hardcoded below; device public key shown on
+//               local web dashboard for admin to register in system console.
+//
+// Flashing notes:
+//   - Clean reflash (wipes saved WiFi + RSA keys → server must re-register
+//     device public key): Tools → Erase All Flash Before Sketch Upload →
+//     All Flash Contents.
+//   - Firmware-only refresh (NVS preserved, no re-registration needed):
+//     leave that menu set to "Sketch Only".
+//
+// MQTT credentials below MUST match mosquitto/.env on the server
+// (MQTT_DEVICE_USER / MQTT_DEVICE_PASSWORD per README.md §5.7).
 // =============================================================================
+
+#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_BUILD   __DATE__ " " __TIME__
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -33,6 +55,7 @@
 #include <WebServer.h>
 #include <time.h>
 #include <esp_task_wdt.h>
+#include <esp_mac.h>          // esp_read_mac() — reliable MAC even before WiFi init
 #include <mbedtls/pk.h>
 #include <mbedtls/rsa.h>
 #include <mbedtls/entropy.h>
@@ -60,32 +83,70 @@
 #define PIN_BUZZER     33
 
 // -----------------------------------------------------------------------------
-// Environment — comment out LOCAL_DEV before flashing for production
+// Environment — uncomment LOCAL_DEV when developing against a local broker
+// (see README.md §4.5 for local Mosquitto setup). Comment it out for prod.
 // -----------------------------------------------------------------------------
-#define LOCAL_DEV
+// #define LOCAL_DEV
 
 // -----------------------------------------------------------------------------
 // Server Configuration
 // -----------------------------------------------------------------------------
 #ifdef LOCAL_DEV
-  // Local dev: plain TCP, no credentials, broker = Mac's local IP
+  // Local dev: plain TCP, no credentials, broker = Mac's local IP.
   // Find your IP with: ipconfig getifaddr en0
+  // README.md §4.5 covers `mosquitto -p 1883` (no auth, no TLS).
   #define MQTT_BROKER  "192.168.x.x"   // ← replace with your Mac's local IP
   #define MQTT_PORT    1883
   #define MQTT_USER    ""
   #define MQTT_PASS    ""
 #else
-  // Production: TLS, broker domain, device credentials
-  #define MQTT_BROKER  "mqtt.your-domain.com"
+  // Production: TLS to the public Mosquitto endpoint published by the
+  // acs-mqtt container (docker-compose.yml: ports "8883:8883").
+  // Credentials must match mosquitto/.env (MQTT_DEVICE_USER / _PASSWORD)
+  // per README.md §5.7. Cert is Let's Encrypt at
+  // /etc/letsencrypt/live/<MQTT_DOMAIN>/ — renewal hook restarts acs-mqtt
+  // (see README.md §5.5 and NGINX.md §6).
+  #define MQTT_BROKER  "mqtt.rpysecurity.online"
   #define MQTT_PORT    8883
   #define MQTT_USER    "acs-device"
-  #define MQTT_PASS    ""               // set before flashing for production
+  #define MQTT_PASS    "Lodgingo321123"
 #endif
 
-// Let's Encrypt ISRG Root X1 CA — valid until 2035-09-30.
-// If your cert chain changes, replace this with the new root CA PEM.
-// Get it from: https://letsencrypt.org/certificates/ (ISRG Root X1, PEM)
+// Trusted CAs for the broker's TLS cert.
+//
+// Broker cert chain (verified via openssl s_client -showcerts):
+//   leaf (mqtt.rpysecurity.online) — ECDSA, signed by:
+//     Let's Encrypt E7 intermediate — ECDSA, signed by:
+//       ISRG Root X1 — RSA
+//
+// We trust BOTH:
+//   (1) Let's Encrypt E7 (ECDSA) — single-step validation of the leaf cert.
+//       Faster, lower memory pressure on ESP32, avoids the RSA-then-ECDSA
+//       chain walk that mbedTLS handles unreliably.
+//   (2) ISRG Root X1 (RSA) — fallback in case the broker rotates to a
+//       different ECDSA intermediate (E8/E9) before we re-flash.
+//
+// Update path: when Let's Encrypt rotates intermediates (every ~12 months),
+// fetch the new active intermediates from https://letsencrypt.org/certificates/
+// and replace E7 below. ISRG Root X1 valid until 2035-09-30 — safer.
 static const char ROOT_CA[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIICtzCCAjygAwIBAgIRAMWKhaLGI0XgqMRSU4efWTowCgYIKoZIzj0EAwMwTzEL
+MAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2VhcmNo
+IEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDIwHhcNMjQwMzEzMDAwMDAwWhcN
+MjcwMzEyMjM1OTU5WjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3MgRW5j
+cnlwdDELMAkGA1UEAxMCRTcwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAARB6ASTCFh/
+vjcwDMCgQer+VtqEkz7JANurZxLP+U9TCeioL6sp5Z8VRvRbYk4P1INBmbefQHJF
+HCxcSjKmwtvGBWpl/9ra8HW0QDsUaJW2qOJqceJ0ZVFT3hbUHifBM/2jgfgwgfUw
+DgYDVR0PAQH/BAQDAgGGMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDATAS
+BgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBSuSJ7chx1EoG/aouVgdAR4wpwA
+gDAfBgNVHSMEGDAWgBR8Qpau3ktIO/qS+J6Mz22LqXI3lTAyBggrBgEFBQcBAQQm
+MCQwIgYIKwYBBQUHMAKGFmh0dHA6Ly94Mi5pLmxlbmNyLm9yZy8wEwYDVR0gBAww
+CjAIBgZngQwBAgEwJwYDVR0fBCAwHjAcoBqgGIYWaHR0cDovL3gyLmMubGVuY3Iu
+b3JnLzAKBggqhkjOPQQDAwNpADBmAjEA/e5N+wjAk945cpaFxGaeMC13fyvdbNzX
+lRg9HNdElxi5mXdI4az2CykNU07iFwqEAjEAihPCDkw4b1BvfLg8VNLLuaMpn1Rb
+Z1682chR6zNRCseyie4SjyTCdkvsAa+omQSf
+-----END CERTIFICATE-----
 -----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
 TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
@@ -219,10 +280,15 @@ unsigned long bootMs           = 0;
 // =============================================================================
 
 String getMacDeviceId() {
-    String mac = WiFi.macAddress(); // "AA:BB:CC:DD:EE:FF"
-    mac.replace(":", "");
-    mac.toUpperCase();
-    return mac;
+    // Read MAC directly from eFuse — reliable regardless of WiFi init state.
+    // WiFi.macAddress() can return zeros on first boot before the WiFi stack
+    // is fully ready, even after WiFi.mode(WIFI_STA).
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    char buf[13];
+    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return String(buf);
 }
 
 String buildApName() {
@@ -468,11 +534,17 @@ bool mqttConnect() {
         MQTT_BROKER, MQTT_PORT, deviceId.c_str());
 
 #ifndef LOCAL_DEV
+  #ifdef MQTT_TLS_INSECURE
+    // DIAGNOSTIC ONLY — do not ship to production. Skips TLS cert validation
+    // to prove whether the broker is reachable when cert chain mismatches.
+    wifiClient.setInsecure();
+  #else
     wifiClient.setCACert(ROOT_CA);           // Verify broker TLS cert against ISRG Root X1
+  #endif
 #endif
     mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
     mqttClient.setBufferSize(600);           // Encrypted ct field is ~380 bytes + JSON overhead
-    mqttClient.setSocketTimeout(5);          // TLS handshake needs more time than plain TCP
+    mqttClient.setSocketTimeout(15);         // TLS handshake on ESP32 can take 5–10s on first connect
     mqttClient.setCallback(mqttCallback);
 
     if (mqttClient.connect(deviceId.c_str(), MQTT_USER, MQTT_PASS)) {
@@ -731,6 +803,7 @@ void handleRoot() {
     // --- Device Info ---
     webServer.sendContent(F("<h4>Device Info</h4><table>"));
     webServer.sendContent("<tr><td>Device ID</td><td>" + deviceId + "</td></tr>");
+    webServer.sendContent("<tr><td>Firmware</td><td>" FIRMWARE_VERSION " (" FIRMWARE_BUILD ")</td></tr>");
     webServer.sendContent("<tr><td>Uptime</td><td>" + String(uptime) + "</td></tr>");
     webServer.sendContent(F("</table>"));
 
@@ -807,6 +880,13 @@ void setup() {
     delay(100);
     Serial.println("\n==============================");
     Serial.println("  Access Control System");
+    Serial.printf ("  Firmware %s  (%s)\n", FIRMWARE_VERSION, FIRMWARE_BUILD);
+    Serial.printf ("  Broker:  %s:%d\n",    MQTT_BROKER, MQTT_PORT);
+#ifdef LOCAL_DEV
+    Serial.println("  Mode:    LOCAL_DEV (plain TCP)");
+#else
+    Serial.println("  Mode:    PRODUCTION (TLS)");
+#endif
     Serial.println("==============================");
 
     // LEDs and buzzer
@@ -836,6 +916,11 @@ void setup() {
     WiFi.mode(WIFI_STA);
     deviceId = getMacDeviceId();
     Serial.printf("[Device] ID: %s\n", deviceId.c_str());
+    if (deviceId == "000000000000") {
+        Serial.println("[Device] FATAL: MAC reads all zeros. Backend will reject this device.");
+        Serial.println("[Device] Check: ESP32 board health, or try a clean re-flash with"
+                       " 'Erase All Flash Before Sketch Upload' enabled.");
+    }
 
     apName          = buildApName();
     subscribedTopic = String(MQTT_RESPONSE_BASE) + deviceId;
@@ -871,7 +956,6 @@ void setup() {
             break;
         }
         webServer.handleClient(); // Stay responsive during NTP wait
-        esp_task_wdt_reset();
         Serial.print(".");
         delay(300);
     }

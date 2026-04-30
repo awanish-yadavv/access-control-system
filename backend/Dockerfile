@@ -17,6 +17,7 @@ RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/migrations ./migrations
 
 EXPOSE 5001
 

@@ -4,3 +4,7 @@ CLAUDE.md
 .env
 *.env
 production-error.md
+
+/graphify-out
+graphify-out
+production-logs.md

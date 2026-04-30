@@ -187,6 +187,7 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=<random 32+ char string>
 NEXT_PUBLIC_API_URL=http://localhost:5001/api
 NEXT_PUBLIC_SOCKET_URL=http://localhost:5001
+BACKEND_URL=http://localhost:5001
 ```
 
 Start the frontend:
@@ -409,8 +410,11 @@ NEXTAUTH_URL=https://app.your-domain.com
 NEXTAUTH_SECRET=<random 64 char string>
 NEXT_PUBLIC_API_URL=https://api.your-domain.com/api
 NEXT_PUBLIC_SOCKET_URL=https://api.your-domain.com
+BACKEND_URL=http://acs-backend:5001
 EOF
 ```
+
+> **`BACKEND_URL` vs `NEXT_PUBLIC_API_URL`** — these point at the same backend but are used in different places. `NEXT_PUBLIC_*` values ship to the browser and must be the public hostname. `BACKEND_URL` is read only by NextAuth's `authorize()` callback, which runs *inside* the frontend container — that fetch goes container-to-container over `acs-net`, so it uses the Docker service name (`acs-backend`), not the public URL. If `BACKEND_URL` is unset, the NextAuth route defaults to `http://localhost:4000` and every login returns "Invalid credentials" with no log line on the backend (because the request never reaches it).
 
 **`mosquitto/.env`**:
 
@@ -664,3 +668,5 @@ docker exec -it acs-backend sh
 # Monitor MQTT messages live (from inside the server)
 docker exec -it acs-mqtt mosquitto_sub -t 'acs/#' -v -u acs-backend -P <password>
 ```
+
+docker exec -it acs-backend sh -c 'apk add --no-cache postgresql-client >/dev/null 2>&1; psql "$DATABASE_URL" -c "SELECT email, substring(password_hash, 1, 15) AS h FROM system.users WHERE email='\''admin@neyofit.io'\'';"'
