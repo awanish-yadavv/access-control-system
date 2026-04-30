@@ -91,6 +91,11 @@ export const updateTenant = async (req: Request, res: Response): Promise<void> =
 export const deleteTenant = async (req: Request, res: Response): Promise<void> => {
   const tenant = await repo().findOne({ where: { id: param(req, 'id') } });
   if (!tenant) { apiError(res, null, 'Tenant not found', 404); return; }
+  // users.tenant_id has no FK; null it out so deleted tenants don't leave dangling refs
+  await AppDataSource.query(
+    `UPDATE system.users SET tenant_id = NULL WHERE tenant_id = $1`,
+    [tenant.id],
+  );
   await dropTenantSchema(tenant.id);
   await repo().remove(tenant);
   apiSuccess(res, null, 'Tenant deleted', 200);

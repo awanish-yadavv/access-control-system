@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api';
 import PermissionGuard from '@/components/auth/PermissionGuard';
 import cn from '@/lib/cn';
 import toast from 'react-hot-toast';
@@ -141,6 +141,11 @@ const TenantsPage = () => {
   const [users, setUsers]   = useState<UserOption[]>([]);
   const [plans, setPlans]   = useState<PlanOption[]>([]);
 
+  // Row actions
+  const [busyId, setBusyId]             = useState<string | null>(null);
+  const [confirmTenant, setConfirmTenant] = useState<Tenant | null>(null);
+  const [confirmInput, setConfirmInput]   = useState('');
+
   const load = async () => {
     try {
       const res = await apiGet<Tenant[]>('/tenants');
@@ -188,6 +193,39 @@ const TenantsPage = () => {
       load();
     } catch { toast.error('Failed to create tenant'); }
     finally { setSaving(false); }
+  };
+
+  const toggleStatus = async (t: Tenant) => {
+    const next = t.status === 'active' ? 'inactive' : 'active';
+    setBusyId(t.id);
+    try {
+      await apiPatch<Tenant>(`/tenants/${t.id}`, { status: next });
+      toast.success(next === 'active' ? 'Tenant enabled' : 'Tenant disabled');
+      load();
+    } catch { toast.error('Failed to update status'); }
+    finally { setBusyId(null); }
+  };
+
+  const openDeleteConfirm = (t: Tenant) => {
+    setConfirmTenant(t);
+    setConfirmInput('');
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmTenant) return;
+    if (confirmInput.trim() !== confirmTenant.name) {
+      toast.error('Tenant name does not match');
+      return;
+    }
+    setBusyId(confirmTenant.id);
+    try {
+      await apiDelete(`/tenants/${confirmTenant.id}`);
+      toast.success('Tenant deleted');
+      setConfirmTenant(null);
+      setConfirmInput('');
+      load();
+    } catch { toast.error('Failed to delete tenant'); }
+    finally { setBusyId(null); }
   };
 
   const selectedUser = users.find(u => u.id === ownerId);
@@ -239,9 +277,29 @@ const TenantsPage = () => {
                 <td className="px-5 py-3 font-mono text-[9px] text-muted-foreground tracking-[0.04em]">tenant_{t.id.slice(0, 8)}</td>
                 <td className="px-5 py-3"><DateTime value={t.createdAt} format="datetime" /></td>
                 <td className="px-5 py-3">
-                  <Link href={`/${t.id}`} className="font-mono text-[9px] tracking-[0.1em] uppercase px-2 py-1 rounded-[3px] border border-primary/30 text-primary hover:bg-primary/10 transition-colors">
-                    View Portal →
-                  </Link>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Link href={`/${t.id}`} className="font-mono text-[9px] tracking-[0.1em] uppercase px-2 py-1 rounded-[3px] border border-primary/30 text-primary hover:bg-primary/10 transition-colors">
+                      View Portal →
+                    </Link>
+                    <PermissionGuard entity="tenants" action="update">
+                      <button
+                        onClick={() => toggleStatus(t)}
+                        disabled={busyId === t.id}
+                        className="font-mono text-[9px] tracking-[0.1em] uppercase px-2 py-1 rounded-[3px] border border-border text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors disabled:opacity-40"
+                      >
+                        {t.status === 'active' ? 'Disable' : 'Enable'}
+                      </button>
+                    </PermissionGuard>
+                    <PermissionGuard entity="tenants" action="delete">
+                      <button
+                        onClick={() => openDeleteConfirm(t)}
+                        disabled={busyId === t.id}
+                        className="font-mono text-[9px] tracking-[0.1em] uppercase px-2 py-1 rounded-[3px] border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                      >
+                        Delete
+                      </button>
+                    </PermissionGuard>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -354,6 +412,53 @@ const TenantsPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmTenant && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirmTenant(null)}>
+          <div className="w-full max-w-md bg-card border border-destructive/30 rounded-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-[11px] font-mono tracking-[0.14em] uppercase text-destructive">Delete Tenant</h2>
+              <button onClick={() => setConfirmTenant(null)} className="text-muted-foreground hover:text-foreground transition-colors"><CloseIcon /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-destructive/10 border border-destructive/25 rounded-md px-3 py-2.5">
+                <p className="text-[12px] text-destructive font-semibold mb-1">This action cannot be undone.</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Deleting <span className="font-semibold text-foreground">{confirmTenant.name}</span> will permanently remove its tenant schema and every record inside it (devices, cards, customers, subscriptions, invoices, membership plans, access rules). System devices and cards previously assigned to this tenant will return to the unassigned pool. Access logs are retained for audit, with their tenant reference cleared.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[9px] font-mono tracking-[0.14em] uppercase text-muted-foreground mb-1.5">
+                  Type <span className="text-foreground">{confirmTenant.name}</span> to confirm
+                </label>
+                <input
+                  autoFocus
+                  value={confirmInput}
+                  onChange={e => setConfirmInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && confirmDelete()}
+                  className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-[13px] text-foreground outline-none focus:border-destructive transition-colors"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setConfirmTenant(null)}
+                  className="flex-1 h-10 bg-secondary text-foreground font-mono text-[10px] tracking-[0.1em] uppercase rounded-md hover:bg-secondary/80 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  disabled={busyId === confirmTenant.id || confirmInput.trim() !== confirmTenant.name}
+                  className="flex-1 h-10 bg-destructive text-destructive-foreground font-mono text-[10px] tracking-[0.1em] uppercase rounded-md hover:bg-destructive/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {busyId === confirmTenant.id ? 'Deleting…' : 'Delete Permanently'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
