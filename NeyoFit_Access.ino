@@ -452,14 +452,25 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.printf("[MQTT] ← %s (%u bytes)\n", topic, length);
     Serial.printf("[MQTT] raw: %s\n", buf);
 
-    // Parse outer envelope (allocate generous heap doc — base64 ct ~344 chars)
+    // Parse outer envelope. Pass as const char* to force COPY mode — zero-copy
+    // mutates buf during tokenization which has caused field-lookup oddities.
     DynamicJsonDocument outer(1024);
-    auto perr = deserializeJson(outer, buf);
+    auto perr = deserializeJson(outer, (const char*)buf, length);
     if (perr != DeserializationError::Ok) {
         Serial.printf("[MQTT] JSON parse error on response: %s\n", perr.c_str());
         return;
     }
-    const char* ct = outer["ct"] | nullptr;
+    Serial.printf("[MQTT] doc memUsage=%u isObject=%d\n",
+        outer.memoryUsage(), outer.is<JsonObject>() ? 1 : 0);
+    if (outer.is<JsonObject>()) {
+        for (JsonPair p : outer.as<JsonObject>()) {
+            Serial.printf("[MQTT] key='%s' type=%s\n", p.key().c_str(),
+                p.value().is<const char*>() ? "string" :
+                p.value().is<int>() ? "int" :
+                p.value().isNull() ? "null" : "other");
+        }
+    }
+    const char* ct = outer["ct"] | (const char*)nullptr;
     if (!ct) { Serial.println("[MQTT] Missing ct field in response"); return; }
 
     // Base64-decode ciphertext
